@@ -20,19 +20,19 @@ flowchart LR
         InfluxDB2[("InfluxDB #2")]
         InfluxDBN[("InfluxDB #n")]
   end
+  subgraph Telegraf["Telegraf w/ execd"]
+  Bridge(["Ignition-InfluxDB Bridge"])
+  end
     PLC1 --> Ignition("Ignition")
     PLC2 --> Ignition
     PLC3 --> Ignition
     Ignition --> PGSQL[("PostgreSql")]
-    PGSQL --> Bridge(["Ignition-InfluxDB Bridge"])
-    Bridge --> Telegraf("Telegraf")
-    Telegraf --> InfluxDB
-    InfluxDB1 <---> InfluxDB2
-    InfluxDB2 <---> InfluxDBN
+    PGSQL --> Bridge
+    Bridge --> InfluxDB1 & InfluxDB2 & InfluxDBN
     classDef basic fill:#ffffff,stroke:#cccccc,stroke-width:3px,color:#000000,font-weight:bold;
     classDef bridge fill:#df151a,stroke:#000000,stroke-width:3px,color:#ffffff,font-weight:bold;
     classDef box fill:#eeeeee,stroke:#aaaaaa,stroke-width:3px,color:#000000,font-weight:bold;
     class PLC1,PLC2,PLC3,Ignition,PGSQL,Telegraf,InfluxDB1,InfluxDB2,InfluxDBN basic;
     class Bridge bridge;
-    class PLC,InfluxDB box;
+    class PLC,InfluxDB,Telegraf box;
 ```
