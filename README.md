@@ -7,27 +7,32 @@ I'm using this program in production and it works well for me, but I'm not a pro
 ## How it Works
 
 ```mermaid
-flowchart TB
-  subgraph PLC["PLCs"]
-  direction TB
-  PLC1["fa:fa-microchip PLC"]
-  PLC2["fa:fa-microchip PLC"]
-  PLC3["fa:fa-microchip PLC"]
+flowchart LR
+ subgraph PLC["PLCs"]
+    direction TB
+        PLC1("PLC")
+        PLC2("PLC")
+        PLC3("PLC")
   end
-  subgraph InfluxDB["InfluxDB Cluster"]
-  direction LR
-  InfluxDB1[("fa:fa-database InfluxDB #1")]
-  InfluxDB2[("fa:fa-database InfluxDB #2")]
-  InfluxDBN[("fa:fa-database InfluxDB #n")]
+ subgraph InfluxDB["InfluxDB Cluster"]
+    direction TB
+        InfluxDB1[("InfluxDB #1")]
+        InfluxDB2[("InfluxDB #2")]
+        InfluxDBN[("InfluxDB #n")]
   end
-  PLC1 -- OPC UA --> Ignition("fa:fa-server Ignition")
-  PLC2 -- OPC UA --> Ignition
-  PLC3 -- OPC UA --> Ignition
-  Ignition -- Publishes Via Historian Module --> PGSQL[("fa:fa-database PostgreSql")]
-  PGSQL -- Data Retrieved By --> Bridge(["fab:fa-python Ignition-InfluxDB Bridge"])
-  Bridge -- Process Managed By --> Telegraf("fa:fa-server Telegraf")
-  Telegraf -- Pushes Data To --> InfluxDB
-  InfluxDB1 <-- Mirrored --> InfluxDB2
-  InfluxDB2 <-- Mirrored --> InfluxDBN
-  style Bridge fill:#FF6D00,stroke:#000000,color:#FFFFFF
+    PLC1 --> Ignition("Ignition")
+    PLC2 --> Ignition
+    PLC3 --> Ignition
+    Ignition --> PGSQL[("PostgreSql")]
+    PGSQL --> Bridge(["Ignition-InfluxDB Bridge"])
+    Bridge --> Telegraf("Telegraf")
+    Telegraf --> InfluxDB
+    InfluxDB1 <---> InfluxDB2
+    InfluxDB2 <---> InfluxDBN
+    classDef basic fill:#ffffff,stroke:#cccccc,stroke-width:3px,color:#000000,font-weight:bold;
+    classDef bridge fill:#df151a,stroke:#000000,stroke-width:3px,color:#ffffff,font-weight:bold;
+    classDef box fill:#eeeeee,stroke:#aaaaaa,stroke-width:3px,color:#000000,font-weight:bold;
+    class PLC1,PLC2,PLC3,Ignition,PGSQL,Telegraf,InfluxDB1,InfluxDB2,InfluxDBN basic;
+    class Bridge bridge;
+    class PLC,InfluxDB box;
 ```
