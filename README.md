@@ -1,74 +1,15 @@
-# Ingition-InfluxDB Bridge
+# Ignition-InfluxDB Bridge
 
-This relatively simple Python script is designed to pull data from a PostgreSQL database populated by Ignition via its Tag Historian module and format that data for insertion into InfluxDB.
+Ignition-InfluxDB Bridge is a Python script designed to be run/managed by [Telegraf](https://www.influxdata.com/time-series-platform/telegraf/) using the [`execd`](https://github.com/influxdata/telegraf/blob/master/plugins/inputs/execd/README.md) plugin. The script connects to a PostgreSQL database populated by [Ignition Tag Historian](https://inductiveautomation.com/ignition/modules/tag-historian), reads data, and outputs lines of [InfluxDB Line Protocol](https://docs.influxdata.com/influxdb/v2/reference/syntax/line-protocol/) that are consumed by Telegraf and forwarded to [InfluxDB](https://www.influxdata.com/products/influxdb/) instances configured as output destinations within Telegraf.
 
-I'm using this program in production and it works well for me, but I'm not a professional Python programmer so I'm sure there are improvements that could be made. Let me know if you have any suggestions!
+Ignition-InfluxDB Bridge retrieves integer/float data from PostgreSQL using the Ignition timestamp. All data is stored in InfluxDB in a float field called `value` using the Ignition tag path as a tag.
 
-## How it Works
+The script itself is fairly simple. Because it interacts directly with the PostgreSQL database populated by Ignition Tag Historian, it does not need to know anything about or have any access to Ignition itself. The script only reads data from the PostgreSQL database, but you should configure a user with read only access for security anyway. Similarly, because the script is designed to be run/managed by Telegraf, the script does not need to know anything about the destination InfluxDB server(s). Telegraf makes it trivial to ingest lines of Line Protocol and forward the data to one or more InfluxDB servers.
 
-```mermaid
-flowchart LR
- subgraph PLC["PLCs"]
-    direction TB
-        PLC1("PLC")
-        PLC2("PLC")
-        PLC3("PLC")
-  end
- subgraph InfluxDB["InfluxDB Cluster"]
-    direction TB
-        InfluxDB1[("InfluxDB #1")]
-        InfluxDB2[("InfluxDB #2")]
-        InfluxDBN[("InfluxDB #n")]
-  end
-  subgraph Telegraf["Telegraf w/ execd"]
-  Bridge(["Ignition-InfluxDB Bridge"])
-  end
-    PLC1 --> Ignition("Ignition")
-    PLC2 --> Ignition
-    PLC3 --> Ignition
-    Ignition --> PGSQL[("PostgreSql")]
-    PGSQL --> Bridge
-    Bridge --> InfluxDB1 & InfluxDB2 & InfluxDBN
-    classDef basic fill:#ffffff,stroke:#cccccc,stroke-width:3px,color:#000000,font-weight:bold;
-    classDef bridge fill:#df151a,stroke:#000000,stroke-width:3px,color:#ffffff,font-weight:bold;
-    classDef box fill:#eeeeee,stroke:#aaaaaa,stroke-width:3px,color:#000000,font-weight:bold;
-    class PLC1,PLC2,PLC3,Ignition,PGSQL,Telegraf,InfluxDB1,InfluxDB2,InfluxDBN basic;
-    class Bridge bridge;
-    class PLC,InfluxDB,Telegraf box;
-```
+I run most of this software on Apple Silicon Mac mini computers (PostgreSQL, Telegraf, InfluxDB, Redis, etc.). I don't know of a platform that makes configuration, management, and backups easier than macOS. You can theoretically run this script on any platform where you can run Telegraf, `execd`, and Python, but I have not tested any platform other than macOS and I don't intend to.
 
-### [Ignition Tag Historian](https://inductiveautomation.com/ignition/modules/tag-historian)
+I store my environment variables in a `.env` file (sample provided). You theoretically don't have to do it that way, but it's what was easiest for me. All connection parameters for PostgreSQL and Redis are stored in environment variables, as is the name of the bucket where data should be stored in InfluxDB.
 
-I'm not going to cover configuring Ignition, OPC UA connections, or a lot of details about configuring the Tag Historian module here. Ignition's documentation is much better than mine.
+I am aware that there is a [commercial module made by Kymera Systems](https://www.kymerasystems.com/kymera-influxdb-module) that allows Ignition to write directly to InfluxDB and query data from InfluxDB in Ignition. I have no experience with that module but I assume it does exactly what it claims. There are benefits to that module (commercial support, not needing PostgreSQL at all, and being able to query InfluxDB data within Ignition, to name a few), but the module has a $5,000 price tag and I do not care about being able to query the historical data stored in InfluxDB from within Ignition. If those things matter to you, check out the Kymera's module.
 
-In my application, I have a separate server running PostgreSQL. I created a very simple connection to the database in Ignition using the PostgreSQL JDBC driver. In the tag history configuration, I specified partitioning data into single day tables (so that I'm querying smaller tables). I also enabled data pruning after 90 days since I'm using InfluxDB for long term data storage.
-
-With that configured, I configure history on tags within Ignition Designer and trust that Ignition will do the work of getting the data into PostgreSQL.
-
-Once the data is in PostgreSQL, the Ignition-InfluxDB Bridge dynamically retrieves a list of tables containing relevant data and then retrieves the data from those tables.
-
-### [Telegraf](https://www.influxdata.com/time-series-platform/telegraf/) & [`execd`](https://github.com/influxdata/telegraf/blob/master/plugins/inputs/execd/README.md)
-
-I'm using Telegraf's `execd` plugin as a process manager for running the Ignition-Influxdb Bridge. The Python script is set to run continuously (with a delay of 5 seconds between each loop), and `execd` handles restarting the script if it ever stops running. It's not a super elegant configuration, but it works in my application.
-
-Telegraf is great because it can be configured to output data to multiple InfluxDB targets at the same time. I run two InfluxDB servers and write my data to both in order to handle downtime on either server. Telegraf makes that trivial. The Ingition-InfluxDB Bridge simply prints data in [InfluxDB Line Protocol](https://docs.influxdata.com/influxdb/v2/reference/syntax/line-protocol/) format and Telegraf handles the rest. This eliminates the need for the Ignition-InfluxDB Bridge to know anything about the InfluxDB servers or configuration.
-
-
-### Ignition-InfluxDB Bridge
-
-The Ignition-InfluxDB Bridge essentially works by querying all data from the Ignition Historian database between the previous iteration end time and 10 seconds ago. If you've been running Ignition Historian for a while, this could cause problems because it may have to try to deal with a lot of data on the first pass. Each iteration, the end time is stored in Redis for retrieval on the next iteration.
-
-Essentially, read the previous iteration end time from Redis (stored in ms since epoch) and add 1 millisecond to get the starting time for this iteration. Calculate the end time for this iteration. Retrieve the data between the two timestamps, print a line of Line Protocol for each record, and then update the end time in Redis for the next iteration.
-
-## General Notes
-
-One of the things I love about this setup is how easy it is to configure everything. Outside of my Ignition servers (I'm running Ignition in a HA setup), I have several cheap Apple Mac mini M1 computers running as my servers:
-
-  - Mac mini running PostgreSQL
-  - Mac mini running Telegraf
-  - (2) Mac mini running InfluxDB
-  - Mac mini running Grafana
-
-I've been happy with the performance of these Mac mini computers (especially as sub-$1000 machines), and [Homebrew](https://brew.sh) makes configuration of all that software a breeze. I use [SuperDuper!](https://www.shirt-pocket.com/SuperDuper/SuperDuperDescription.html) to make nightly clones of each machine.
-
-I know the script is light on error checking and handling, but I'm okay with that for now. If there's an error in my script, I still have all the data in the Ignition Historian database for 90 days, so I can adjust and retrieve data as needed.
+I specifically wanted to get my data into InfluxDB for long term storage because it's easy to replicate data across multiple InfluxDB instances, it's easy to downsample older historical data in InfluxDB, it's easy for advanced end users to explore the data within InfluxDB, and [Grafana](https://grafana.com/) is my visualization platform of choice for historical data. I keep 90 days worth of historical data in the PostgreSQL database managed by Ignition, so I have that much data available within Ignition if necessary.
