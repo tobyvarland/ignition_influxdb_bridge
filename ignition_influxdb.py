@@ -98,12 +98,12 @@ class Historizer:
         sqlth_te ON {table}.tagid = sqlth_te.id
       WHERE
         {table}.t_stamp BETWEEN %s AND %s AND
-        sqlth_te.datatype != %s;
+        sqlth_te.datatype IN (%s, %s);
     """.format(table=table)
-  
+    
     # Retrieve data from the specified table.
     with self.pgsql_conn.cursor() as cur:
-      cur.execute(query, (self.start_time, self.end_time, 2))
+      cur.execute(query, (self.start_time, self.end_time, 0, 1))
       rows = cur.fetchall()
 
     # Format and print each row.
