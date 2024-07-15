@@ -31,6 +31,9 @@ class Historizer:
       password=os.getenv("IGNITION_INFLUXDB_REDIS_PASSWORD")
     )
 
+    # Read and store bucket name.
+    self.bucket = os.getenv("IGNITION_INFLUXDB_INFLUXDB_BUCKET")
+
     # Configure translation table for InfluxDB Line Protocol.
     self.lp_trans = str.maketrans({",": "\\,", "=": "\\=", " ": "\\ "})
 
@@ -112,7 +115,7 @@ class Historizer:
 
     # Format and print the row in InfluxDB Line Protocol.
     try:
-      print(f"ignition,tagpath={row[0].translate(self.lp_trans)} value={float(row[2]) if row[1] == 0 else float(row[3])} {row[4]}000000")
+      print(f"{self.bucket},tagpath={row[0].translate(self.lp_trans)} value={float(row[2]) if row[1] == 0 else float(row[3])} {row[4]}000000")
     except Exception:
       return
 
